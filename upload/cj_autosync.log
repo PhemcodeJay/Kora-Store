@@ -1,0 +1,9 @@
+[2026-09-22 00:30:40] Starting auto-sync (count=5, sortBy=createTime desc)...
+[2026-09-22 00:30:55] DONE: 3 imported, 2 skipped, 0 failed.
+[2026-09-22 00:30:55]   [skipped] pid=2609211306491625300: already in store
+[2026-09-22 00:30:55]   [skipped] pid=2609211300381638000: already in store
+[2026-09-22 00:30:55]   [ok] pid=2609211253121633900: Simulation Baby Bottle Squeeze Toy Used For Stress Relief (retail $2.35)
+[2026-09-22 00:30:55]   [ok] pid=2609211245361622100: Fruit Smoothie DIY Ball Toy (retail $4.30)
+[2026-09-22 00:30:55]   [ok] pid=2609211234571627900: Simulation Fruit Jelly Stick Toy (retail $4.50)
+[2026-09-22 00:36:13] SKIPPED: last run was 318 seconds ago (interval = 24h).
+[2026-10-01 10:22:25] BLOCKED: web request not allowed
