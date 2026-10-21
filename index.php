@@ -380,16 +380,15 @@ foreach ($result as $row)
 
 
 <?php
-// A dedicated, configurable-limit-independent section for imported products.
-// This ensures a fresh CJ catalogue is visible even when the legacy homepage
-// carousel settings are set to one product.
 $statement = $pdo->prepare("SELECT p_id, p_name, p_old_price, p_current_price, p_qty, p_featured_photo
     FROM tbl_product
     WHERE cj_product_id IS NOT NULL AND cj_product_id<>'' AND p_is_active=1
-    ORDER BY p_id DESC LIMIT 8");
+    ORDER BY p_id DESC");
 $statement->execute();
 $cj_products = $statement->fetchAll(PDO::FETCH_ASSOC);
 if ($cj_products):
+    $cj_total = count($cj_products);
+    $cj_per_row = 4;
 ?>
 <div class="product pt_70 pb_70">
     <div class="container">
@@ -402,14 +401,60 @@ if ($cj_products):
             </div>
         </div>
         <div class="row">
-            <div class="col-md-12">
-                <div class="product-carousel">
-                    <?php foreach ($cj_products as $cjProduct): ?>
-                        <?php require __DIR__ . '/partials/cj-product-card.php'; ?>
-                    <?php endforeach; ?>
+            <?php for ($cj_i = 0; $cj_i < $cj_total; $cj_i += $cj_per_row): ?>
+                <div class="col-md-<?php echo $cj_per_row; ?>">
+                    <div class="product-carousel">
+                        <?php for ($cj_j = $cj_i; $cj_j < $cj_i + $cj_per_row && $cj_j < $cj_total; $cj_j++): ?>
+                            <?php require __DIR__ . '/partials/cj-product-card.php'; ?>
+                        <?php endfor; ?>
+                    </div>
                 </div>
-                <p class="text-center mt_30"><a class="btn btn-primary" href="cj-products.php">View All Dropshipping Products</a></p>
+            <?php endfor; ?>
+        </div>
+        <p class="text-center mt_30"><a class="btn btn-primary" href="cj-products.php">View All Dropshipping Products</a></p>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php
+// Digital products personally uploaded by the store admin.
+$statement = $pdo->query("SELECT * FROM tbl_digital_products WHERE is_digital = 1 ORDER BY id DESC");
+$digital_products = $statement->fetchAll(PDO::FETCH_ASSOC);
+if ($digital_products):
+    $digital_total = count($digital_products);
+    $digital_per_row = 4;
+?>
+<div class="product pt_70 pb_70">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="headline">
+                    <h2>Digital Products</h2>
+                    <h3>Instant downloads — files delivered to your inbox</h3>
+                </div>
             </div>
+        </div>
+        <div class="row">
+            <?php for ($di = 0; $di < $digital_total; $di += $digital_per_row): ?>
+                <div class="col-md-<?php echo $digital_per_row; ?>">
+                    <div class="product-carousel">
+                        <?php for ($dj = $di; $dj < $di + $digital_per_row && $dj < $digital_total; $dj++): ?>
+                            <?php $dp = $digital_products[$dj]; ?>
+                            <div class="item">
+                                <div class="thumb">
+                                    <div class="photo" style="background-image:url(assets/uploads/<?php echo htmlspecialchars($dp['product_image'] ?? ''); ?>);"></div>
+                                    <div class="overlay"></div>
+                                </div>
+                                <div class="text">
+                                    <h3><a href="digital-product.php"><?php echo htmlspecialchars($dp['name']); ?></a></h3>
+                                    <h4>$<?php echo number_format((float)$dp['price'], 2); ?></h4>
+                                    <p><a href="digital-product.php"><i class="fa fa-shopping-cart"></i> Buy Now</a></p>
+                                </div>
+                            </div>
+                        <?php endfor; ?>
+                    </div>
+                </div>
+            <?php endfor; ?>
         </div>
     </div>
 </div>
