@@ -3,7 +3,10 @@
 <?php
 if(isset($_POST['form1'])) {
         $valid = 1;
+    $product_type = $_POST['product_type'] ?? 'goods';
+    $edit_id = $_REQUEST['id'] ?? 0;
 
+    if($product_type !== 'digital') {
     if(empty($_POST['tcat_id'])) {
         $valid = 0;
         $error_message .= "You must have to select a top level category<br>";
@@ -33,11 +36,14 @@ if(isset($_POST['form1'])) {
         $valid = 0;
         $error_message .= "Quantity can not be empty<br>";
     }
+    }
 
-    $path = $_FILES['p_featured_photo']['name'];
-    $path_tmp = $_FILES['p_featured_photo']['tmp_name'];
+    $path = $_FILES['p_featured_photo']['name'] ?? '';
+    $path_tmp = $_FILES['p_featured_photo']['tmp_name'] ?? '';
+    $ext = '';
 
-    if($path!='') {
+    // Featured photo validation only for physical/dropshipping (when changing photo)
+    if($product_type !== 'digital' && $path!='') {
         $ext = pathinfo( $path, PATHINFO_EXTENSION );
         $file_name = basename( $path, '.' . $ext );
         if( $ext!='jpg' && $ext!='png' && $ext!='jpeg' && $ext!='gif' ) {
@@ -46,10 +52,51 @@ if(isset($_POST['form1'])) {
         }
     }
 
+    // Digital product specific validation
+    if($product_type === 'digital') {
+        if(empty($_POST['digital_file_url'])) {
+            $valid = 0;
+            $error_message .= "Digital file download URL can not be empty<br>";
+        }
+        if(!empty($_POST['digital_file_url']) && !filter_var($_POST['digital_file_url'], FILTER_VALIDATE_URL)) {
+            $valid = 0;
+            $error_message .= "Digital file URL must be a valid URL<br>";
+        }
+    }
+
 
     if($valid == 1) {
 
-        if( isset($_FILES['photo']["name"]) && isset($_FILES['photo']["tmp_name"]) )
+        if($product_type === 'digital') {
+            // Update tbl_digital_products
+            $statement = $pdo->prepare("UPDATE tbl_digital_products SET 
+                                                        name=?,
+                                                        description=?,
+                                                        price=?,
+                                                        file_url=?,
+                                                        product_image=?
+                                                WHERE id=?");
+            $digital_image = $_POST['current_digital_image'] ?? '';
+            if($path!='') {
+                $ext = pathinfo($path, PATHINFO_EXTENSION);
+                $digital_image = 'digital-featured-'.uniqid().'.'.$ext;
+                move_uploaded_file($path_tmp, '../assets/uploads/'.$digital_image);
+                // Delete old image if exists
+                if(!empty($_POST['current_digital_image'])) {
+                    $oldImage = '../assets/uploads/'.$_POST['current_digital_image'];
+                    if(file_exists($oldImage)) { unlink($oldImage); }
+                }
+            }
+            $statement->execute(array(
+                                                        $_POST['p_name'],
+                                                        $_POST['p_description'] ?? '',
+                                                        $_POST['p_current_price'],
+                                                        $_POST['digital_file_url'],
+                                                        $digital_image,
+                                                        $edit_id
+                                                ));
+        } else {
+            if( isset($_FILES['photo']["name"]) && isset($_FILES['photo']["tmp_name"]) )
         {
 
                 $photo = array();
@@ -187,6 +234,7 @@ if(isset($_POST['form1'])) {
                 }
         
         $success_message = 'Product is updated successfully.';
+        }
     }
 }
 ?>
@@ -218,10 +266,40 @@ if(!isset($_REQUEST['id'])) {
 </section>
 
 <?php
-$statement = $pdo->prepare("SELECT * FROM tbl_product WHERE p_id=?");
-$statement->execute(array($_REQUEST['id']));
-$result = $statement->fetchAll(PDO::FETCH_ASSOC);
-foreach ($result as $row) {
+$product_type = 'goods';
+$digital_file_url = '';
+$current_digital_image = '';
+
+// Check if product is digital
+$stmt = $pdo->prepare("SELECT * FROM tbl_digital_products WHERE id=?");
+$stmt->execute(array($_REQUEST['id']));
+$digital_result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+if (!empty($digital_result)) {
+    $product_type = 'digital';
+    foreach ($digital_result as $row) {
+        $p_name = $row['name'];
+        $p_current_price = $row['price'];
+        $digital_file_url = $row['file_url'];
+        $current_digital_image = $row['product_image'];
+        $p_description = $row['description'];
+        $p_old_price = '';
+        $p_qty = '';
+        $p_featured_photo = $row['product_image'];
+        $p_short_description = '';
+        $p_feature = '';
+        $p_condition = '';
+        $p_return_policy = '';
+        $p_is_featured = '1';
+        $p_is_active = '1';
+        $ecat_id = '';
+    }
+} else {
+    // Load from tbl_product
+    $statement = $pdo->prepare("SELECT * FROM tbl_product WHERE p_id=?");
+    $statement->execute(array($_REQUEST['id']));
+    $result = $statement->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($result as $row) {
         $p_name = $row['p_name'];
         $p_old_price = $row['p_old_price'];
         $p_current_price = $row['p_current_price'];
@@ -235,6 +313,7 @@ foreach ($result as $row) {
         $p_is_featured = $row['p_is_featured'];
         $p_is_active = $row['p_is_active'];
         $ecat_id = $row['ecat_id'];
+    }
 }
 
 $statement = $pdo->prepare("SELECT * 
@@ -290,6 +369,29 @@ foreach ($result as $row) {
                         <?php endif; ?>
 
                         <form class="form-horizontal" action="" method="post" enctype="multipart/form-data">
+
+                                <!-- Product Type -->
+                                <div class="form-group">
+                                                        <label for="" class="col-sm-3 control-label">Product Type</label>
+                                                        <div class="col-sm-4">
+                                                                <select name="product_type" id="productTypeEdit" class="form-control">
+                                                                        <option value="goods" <?php echo ($product_type == 'goods') ? 'selected' : ''; ?>>Physical Products</option>
+                                                                        <option value="digital" <?php echo ($product_type == 'digital') ? 'selected' : ''; ?>>Digital Product</option>
+                                                                        <option value="dropshipping" <?php echo ($product_type == 'dropshipping') ? 'selected' : ''; ?>>Dropshipping</option>
+                                                                </select>
+                                                        </div>
+                                                </div>
+
+                                <!-- Digital Product Fields -->
+                                <div class="form-group" id="digital-fields-edit" style="<?php echo ($product_type == 'digital') ? 'display:block;' : 'display:none;'; ?>">
+                                                        <label for="" class="col-sm-3 control-label">Digital File Download URL <span>*</span></label>
+                                                        <div class="col-sm-8">
+                                                                <input type="url" name="digital_file_url" class="form-control" value="<?php echo htmlspecialchars($digital_file_url); ?>" placeholder="https://example.com/downloads/file.zip">
+                                                                <input type="hidden" name="current_digital_image" value="<?php echo htmlspecialchars($current_digital_image); ?>">
+                                                                <small class="text-muted">Direct download link for the digital product</small>
+                                                        </div>
+                                                </div>
+
 
                                 <div class="box box-info">
                                         <div class="box-body">
@@ -502,6 +604,17 @@ foreach ($result as $row) {
                                                                 </select> 
                                                         </div>
                                                 </div>
+<div class="form-group">
+                                                        <label for="" class="col-sm-3 control-label">Is Dropshipping?</label>
+                                                        <div class="col-sm-8">
+                                                                <select name="is_dropshipping" class="form-control" style="width:auto;">
+                                                                        <option value="0">No</option>
+                                                                        <option value="1">Yes</option>
+                                                                </select>
+                                                        </div>
+                                                </div>
+                                                <div class="form-group">
+                                                        <label for="" class="col-sm-3 control-label">Is Active?</label>
                                                 <div class="form-group">
                                                         <label for="" class="col-sm-3 control-label">Is Active?</label>
                                                         <div class="col-sm-8">
@@ -521,6 +634,21 @@ foreach ($result as $row) {
                                 </div>
 
                         </form>
+
+        <script>
+    function toggleProductTypeFieldsEdit() {
+        var selectedType = document.getElementById('productTypeEdit').value;
+        var digitalFields = document.getElementById('digital-fields-edit');
+        if (selectedType === 'digital') {
+            digitalFields.style.display = 'block';
+        } else {
+            digitalFields.style.display = 'none';
+        }
+    }
+    document.getElementById('productTypeEdit').addEventListener('change', toggleProductTypeFieldsEdit);
+    toggleProductTypeFieldsEdit();
+</script>
+
 
 
                 </div>

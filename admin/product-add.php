@@ -3,22 +3,9 @@
 <?php
 if(isset($_POST['form1'])) {
         $valid = 1;
+    $product_type = $_POST['product_type'] ?? 'goods';
 
-    if(empty($_POST['tcat_id'])) {
-        $valid = 0;
-        $error_message .= "You must have to select a top level category<br>";
-    }
-
-    if(empty($_POST['mcat_id'])) {
-        $valid = 0;
-        $error_message .= "You must have to select a mid level category<br>";
-    }
-
-    if(empty($_POST['ecat_id'])) {
-        $valid = 0;
-        $error_message .= "You must have to select an end level category<br>";
-    }
-
+    // Required for all product types
     if(empty($_POST['p_name'])) {
         $valid = 0;
         $error_message .= "Product name can not be empty<br>";
@@ -29,30 +16,93 @@ if(isset($_POST['form1'])) {
         $error_message .= "Current Price can not be empty<br>";
     }
 
-    if(empty($_POST['p_qty'])) {
-        $valid = 0;
-        $error_message .= "Quantity can not be empty<br>";
-    }
-
-    $path = $_FILES['p_featured_photo']['name'];
-    $path_tmp = $_FILES['p_featured_photo']['tmp_name'];
-
-    if($path!='') {
-        $ext = pathinfo( $path, PATHINFO_EXTENSION );
-        $file_name = basename( $path, '.' . $ext );
-        if( $ext!='jpg' && $ext!='png' && $ext!='jpeg' && $ext!='gif' ) {
+    // Categories and qty required only for physical/dropshipping products
+    $is_dropshipping = $_POST['is_dropshipping'] ?? 0;
+    if($product_type !== 'digital') {
+        if(empty($_POST['tcat_id'])) {
             $valid = 0;
-            $error_message .= 'You must have to upload jpg, jpeg, gif or png file<br>';
+            $error_message .= "You must have to select a top level category<br>";
         }
-    } else {
-        $valid = 0;
-        $error_message .= 'You must have to select a featured photo<br>';
+
+        if(empty($_POST['mcat_id'])) {
+            $valid = 0;
+            $error_message .= "You must have to select a mid level category<br>";
+        }
+
+        if(empty($_POST['ecat_id'])) {
+            $valid = 0;
+            $error_message .= "You must have to select an end level category<br>";
+        }
+
+        if(empty($_POST['p_qty'])) {
+            $valid = 0;
+            $error_message .= "Quantity can not be empty<br>";
+        }
     }
 
+    $path = $_FILES['p_featured_photo']['name'] ?? '';
+    $path_tmp = $_FILES['p_featured_photo']['tmp_name'] ?? '';
+    $ext = '';
+
+    // Featured photo required only for physical/dropshipping products
+    if($product_type !== 'digital') {
+        if($path!='') {
+            $ext = pathinfo( $path, PATHINFO_EXTENSION );
+            $file_name = basename( $path, '.' . $ext );
+            if( $ext!='jpg' && $ext!='png' && $ext!='jpeg' && $ext!='gif' ) {
+                $valid = 0;
+                $error_message .= 'You must have to upload jpg, jpeg, gif or png file<br>';
+            }
+        } else {
+            $valid = 0;
+            $error_message .= 'You must have to select a featured photo<br>';
+        }
+    }
+
+    // Digital product specific validation
+    if($product_type === 'digital') {
+        if(empty($_POST['digital_file_url'])) {
+            $valid = 0;
+            $error_message .= "Digital file download URL can not be empty<br>";
+        }
+        if(!empty($_POST['digital_file_url']) && !filter_var($_POST['digital_file_url'], FILTER_VALIDATE_URL)) {
+            $valid = 0;
+            $error_message .= "Digital file URL must be a valid URL<br>";
+        }
+    }
 
     if($valid == 1) {
 
-        $ai_id = get_next_id($pdo, 'tbl_product');
+        if($product_type === 'digital') {
+            // Insert into tbl_digital_products
+            $statement = $pdo->prepare("INSERT INTO tbl_digital_products(
+                                                        name,
+                                                        description,
+                                                        price,
+                                                        file_url,
+                                                        is_digital,
+                                                        product_image
+                                                ) VALUES (?,?,?,?,?,?)");
+            $digital_image = '';
+            if($path!='') {
+                $ext = pathinfo($path, PATHINFO_EXTENSION);
+                $digital_image = 'digital-featured-'.uniqid().'.'.$ext;
+                move_uploaded_file($path_tmp, '../assets/uploads/'.$digital_image);
+            }
+            $statement->execute(array(
+                                                        $_POST['p_name'],
+                                                        $_POST['p_description'] ?? '',
+                                                        $_POST['p_current_price'],
+                                                        $_POST['digital_file_url'],
+                                                        1,
+                                                        $digital_image
+                                                ));
+            $ai_id = $pdo->lastInsertId('tbl_digital_products_id_seq');
+            if(!$ai_id) {
+                $ai_id = $pdo->lastInsertId();
+            }
+        } else {
+            $ai_id = get_next_id($pdo, 'tbl_product');
 
         if( isset($_FILES['photo']["name"]) && isset($_FILES['photo']["tmp_name"]) )
         {
@@ -144,6 +194,7 @@ if(isset($_POST['form1'])) {
         $success_message = 'Product is added successfully.';
     }
 }
+}
 ?>
 
 <section class="content-header">
@@ -189,6 +240,15 @@ if(isset($_POST['form1'])) {
                                                                         </select>
                                                                 </div>
                                                         </div>
+
+                                <!-- Digital Product Fields -->
+                                <div class="form-group" id="digital-fields" style="display:none;">
+                                                        <label for="" class="col-sm-3 control-label">Digital File Download URL <span>*</span></label>
+                                                        <div class="col-sm-8">
+                                                                <input type="url" name="digital_file_url" class="form-control" placeholder="https://example.com/downloads/file.zip">
+                                                                <small class="text-muted">Direct download link for the digital product</small>
+                                                        </div>
+                                                </div>
 
                                 <div class="box box-info">
                                         <div class="box-body">
@@ -349,6 +409,15 @@ if(isset($_POST['form1'])) {
                                                                 </select> 
                                                         </div>
                                                 </div>
+<div class="form-group">
+                                                        <label for="" class="col-sm-3 control-label">Is Dropshipping?</label>
+                                                        <div class="col-sm-8">
+                                                                <select name="is_dropshipping" class="form-control" style="width:auto;">
+                                                                        <option value="0">No</option>
+                                                                        <option value="1">Yes</option>
+                                                                </select>
+                                                        </div>
+                                                </div>
                                                 <div class="form-group">
                                                         <label for="" class="col-sm-3 control-label">Is Active?</label>
                                                         <div class="col-sm-8">
@@ -373,18 +442,19 @@ if(isset($_POST['form1'])) {
                 </div>
         </div>
         <script>
-    document.getElementById('productType').addEventListener('change', function () {
-    var selectedType = this.value;
-
-    // Redirect to the corresponding page based on the selected product type
-    if (selectedType === 'digital') {
-        window.location.href = 'add-digital-product.php'; // Redirect to Digital Product page
-    } else if (selectedType === 'dropshipping') {
-        window.location.href = 'add-dropshipping-product.php'; // Redirect to Dropshipping Product page
+    // Toggle digital product fields based on product type
+    function toggleProductTypeFields() {
+        var selectedType = document.getElementById('productType').value;
+        var digitalFields = document.getElementById('digital-fields');
+        if (selectedType === 'digital') {
+            digitalFields.style.display = 'block';
+        } else {
+            digitalFields.style.display = 'none';
+        }
     }
-});
-
-
+    document.getElementById('productType').addEventListener('change', toggleProductTypeFields);
+    // Initialize on page load
+    toggleProductTypeFields();
 </script>
 </section>
 
